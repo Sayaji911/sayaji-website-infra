@@ -1,16 +1,21 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
+import { WebsiteBucket } from './constructs/website-bucket'
 
 export class WebsiteStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // The code that defines your stack goes here
+    const resumeSite = new WebsiteBucket(this, 'DevopsBucket',{
+      bucketName: "devops.sayaji.dev",
+      indexDocument: "index.html",
+      errorDocument: "error.html"
+    });
 
-    // example resource
-    // const queue = new sqs.Queue(this, 'WebsiteQueue', {
-    //   visibilityTimeout: cdk.Duration.seconds(300)
-    // });
+    const blogSite = new WebsiteBucket(this, 'BlogBucket',{
+      bucketName: "blog.sayaji.dev",
+      indexDocument: "index.html",
+      errorDocument: "error.html"
+    });
   }
 }
