@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import * as cdk from "aws-cdk-lib";
-import { WebsiteStack, ResumeStack } from "../lib/website-stack";
+import { HomePageStack ,BlogStack, ResumeStack } from "../lib/website-stack";
 import { BaseInfraStack } from "../lib/base-infra-stack";
 import { BackendStack } from "../lib/backend-stack";
 
@@ -33,7 +33,7 @@ const baseProps = {
   crossRegionReferences: true,
 } as const;
 
-new WebsiteStack(app, "WebsiteStack", {
+new BlogStack(app, "BlogStack", {
   ...baseProps,
   siteDomain: "blog.sayaji.dev",
   sitePrefix: "blog",
@@ -46,6 +46,14 @@ new ResumeStack(app, "ResumeStack", {
   ...baseProps,
   siteDomain: "resume.sayaji.dev",
   sitePrefix: "resume",
+  apiUrl: backend.apiUrl,
+  cfSecret: backend.cfSecret,
+});
+
+new HomePageStack(app, "HomePageStack", {
+  ...baseProps,
+  siteDomain: "www.sayaji.dev",
+  sitePrefix: "home",
   apiUrl: backend.apiUrl,
   cfSecret: backend.cfSecret,
 });

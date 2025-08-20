@@ -54,7 +54,7 @@ abstract class BaseWebsiteStack extends cdk.Stack {
 }
 
 // Blog site without API integration
-export class WebsiteStack extends BaseWebsiteStack {
+export class BlogStack extends BaseWebsiteStack {
   constructor(scope: Construct, id: string, props: cdk.StackProps & BaseWebsiteStackProps) {
     super(scope, id, {
       ...props,
@@ -74,6 +74,18 @@ export class ResumeStack extends BaseWebsiteStack {
       apiPath: "/count",  // Only ResumeStack uses the API
       apiUrl: props.apiUrl,
       cfSecret: props.cfSecret
+    });
+  }
+}
+
+export class HomePageStack extends BaseWebsiteStack {
+  constructor(scope: Construct, id: string, props: cdk.StackProps & BaseWebsiteStackProps) {
+    super(scope, id, {
+      ...props,
+      siteDomain: props.siteDomain,
+      sitePrefix: props.sitePrefix,
+      cfSecret: props.cfSecret
+
     });
   }
 }
