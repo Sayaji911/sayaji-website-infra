@@ -52,7 +52,7 @@ new ResumeStack(app, "ResumeStack", {
 
 new HomePageStack(app, "HomePageStack", {
   ...baseProps,
-  siteDomain: "www.sayaji.dev",
+  siteDomain: "sayaji.dev",
   sitePrefix: "",
   apiUrl: backend.apiUrl,
   cfSecret: backend.cfSecret,
