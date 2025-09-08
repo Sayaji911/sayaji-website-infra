@@ -33,7 +33,7 @@ export class WebsiteDistribution extends Construct {
           {
             protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
             customHeaders: {
-              "x-cf-secret": props.cfSecret.secretValue.unsafeUnwrap() // Use unsafeUnwrap()
+              "x-cf-secret": props.cfSecret.secretValueFromJson('x-cf-secret').unsafeUnwrap() // Use unsafeUnwrap()
             },
           }
         )

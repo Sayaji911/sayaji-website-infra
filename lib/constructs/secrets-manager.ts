@@ -17,15 +17,17 @@ export class BackendSecret extends Construct {
 
     this.secret = new secretsmanager.Secret(this, props.secretName, {
       secretName: props.secretName,
-      generateSecretString: props.secretString
-        ? undefined
-        : {
-            secretStringTemplate: JSON.stringify({ key: "value" }),
-            generateStringKey: props.secretKey,
-          },
+      generateSecretString: {
+          secretStringTemplate: JSON.stringify({}),
+          generateStringKey: 'x-cf-secret',
+
+          // excludeCharacters: '/@"',
+        },
+
       description: "Secret for CloudFront header validation",
       removalPolicy: cdk.RemovalPolicy.DESTROY,  // for dev/testing
 
     });
+
   }
 }

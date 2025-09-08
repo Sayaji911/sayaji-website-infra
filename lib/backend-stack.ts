@@ -71,8 +71,8 @@ export class BackendStack extends cdk.Stack {
       value: api.api.url!,
     });
 
-    new cdk.CfnOutput(this, "SecretName", {
-      value: cfSecret.secret.secretName,
+    new cdk.CfnOutput(this, "SecretArn", {
+      value: cfSecret.secret.secretArn,
     });
   }
 }
