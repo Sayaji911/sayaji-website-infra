@@ -7,6 +7,9 @@ import { BackendLambda } from "./constructs/lambda-function";
 import { BackendApi } from "./constructs/api-gateway";
 import * as path from "path";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager"
+import * as logs from "./constructs/cloudwatch-log-group"
+import * as cwlogs from "aws-cdk-lib/aws-logs";
+
 export class BackendStack extends cdk.Stack {
   public readonly apiUrl: string;
   public readonly cfSecret: secretsmanager.ISecret;
@@ -40,6 +43,11 @@ export class BackendStack extends cdk.Stack {
     // Give Counter Lambda permissions to DynamoDB
     counterTable.table.grantReadWriteData(counterLambda.function);
 
+    const counterLambdaLogs  = new logs.LogGroup(this, "CounterLambdaLogs", {
+      logGroupName: `/aws/lambda/counter-lambda`,
+      retention: cwlogs.RetentionDays.ONE_WEEK
+    })
+
     // Authorizer Lambda
     const authorizerLambda = new BackendLambda(this, "AuthorizerLambda", {
       lambdaName: "api-authorizer",
@@ -54,14 +62,27 @@ export class BackendStack extends cdk.Stack {
     // Give Authorizer Lambda permissions to Secrets Manager
     cfSecret.secret.grantRead(authorizerLambda.function);
 
+
+    const authorizerLambdaLogs  = new logs.LogGroup(this, "AuthorizerLambdaLogs", {
+      logGroupName: `/aws/lambda/authorizer-lambda`,
+      retention: cwlogs.RetentionDays.ONE_WEEK
+    })
+
     // API Gateway with Lambda Integration and Authorizer
     const api = new BackendApi(this, "CounterApi", {
+      
       apiName: "visitor-counter-api",
       applicationLambda: counterLambda.function,
       authorizerLambda: authorizerLambda.function,
       path: "/count",
       methods: ["GET"],
     });
+
+    const counterAPIGatewayLogs  = new logs.LogGroup(this, "CounterAPIGatewayLogs", {
+      logGroupName: `/aws/api-gateway/${api.api.httpApiName}`,
+      retention: cwlogs.RetentionDays.ONE_WEEK
+    })
+
 
     this.apiUrl = api.api.url!;
     this.cfSecret = cfSecret.secret;

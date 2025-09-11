@@ -7,6 +7,8 @@ import * as route53 from "aws-cdk-lib/aws-route53";
 import * as certificatemanager from "aws-cdk-lib/aws-certificatemanager";
 import * as route53targets from "aws-cdk-lib/aws-route53-targets";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager"
+import * as logs from "./constructs/cloudwatch-log-group"
+import * as cwlogs from "aws-cdk-lib/aws-logs";
 
 interface BaseWebsiteStackProps extends cdk.StackProps {
   hostedZoneId: string;
@@ -50,6 +52,12 @@ abstract class BaseWebsiteStack extends cdk.Stack {
       apiPath: props.apiPath,
       cfSecret: props.cfSecret,
     });
+
+    const cfLogGroup  = new logs.LogGroup(this, "CloudformationLogGroup", {
+      logGroupName: `/aws/cloudformation/${distribution.distribution.distributionDomainName}`,
+      retention: cwlogs.RetentionDays.ONE_WEEK
+    })
+
   }
 }
 
