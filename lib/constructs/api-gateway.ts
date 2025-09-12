@@ -1,7 +1,7 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as apigateway from "aws-cdk-lib/aws-apigatewayv2";
-import * as apigatewayv1 from "aws-cdk-lib/aws-apigateway"; // only for AccessLogFormat
+import * as apigatewayv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as authorizer from "aws-cdk-lib/aws-apigatewayv2-authorizers";
@@ -13,6 +13,7 @@ export interface BackendApiProps {
   authorizerLambda: lambda.Function;
   path: string;
   methods: string[];
+  loggroup: logs.ILogGroup
 }
 
 export class BackendApi extends Construct {
@@ -21,11 +22,6 @@ export class BackendApi extends Construct {
   constructor(scope: Construct, id: string, props: BackendApiProps) {
     super(scope, id);
 
-    // Create a log group for access logs
-    const logGroup = new logs.LogGroup(this, "ApiAccessLogs", {
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
 
     // HttpApi without default stage (we’ll define our own)
     this.api = new apigateway.HttpApi(this, "HttpApi", {
@@ -34,26 +30,31 @@ export class BackendApi extends Construct {
     });
 
     // Explicitly create $default stage with logging enabled
-    new apigateway.HttpStage(this, "DefaultStage", {
-      httpApi: this.api,
+    new apigatewayv2.CfnStage(this, "DefaultStage", {
+      apiId: this.api.apiId,
       stageName: "$default",
       autoDeploy: true,
       accessLogSettings: {
-        destination: new apigateway.LogGroupLogDestination(logGroup),
-        format: apigatewayv1.AccessLogFormat.jsonWithStandardFields({
-          httpMethod: true,
-          ip: true,
-          protocol: true,
-          requestTime: true,
-          resourcePath: true,
-          responseLength: true,
-          status: true,
-          caller: true,
-          user: true,
+        destinationArn: props.loggroup.logGroupArn,
+        format: JSON.stringify({
+          requestId: "$context.requestId",
+          ip: "$context.identity.sourceIp",
+          userAgent: "$context.identity.userAgent",
+          requestTime: "$context.requestTime",
+          httpMethod: "$context.httpMethod",
+          routeKey: "$context.routeKey",
+          status: "$context.status",
+          protocol: "$context.protocol",
+          responseLength: "$context.responseLength",
+          // Authorizer-related
+          principalId: "$context.authorizer.principalId",
+          userId: "$context.authorizer.userId",      // if your Lambda authorizer returns this
+          claims: "$context.authorizer.claims",      // for JWT authorizer claims
+          scopes: "$context.authorizer.scopes",      // for JWT authorizer scopes
+          authorizerError: "$context.authorizer.error"
         }),
       },
     });
-
     const lambdaAuthorizer = new authorizer.HttpLambdaAuthorizer(
       "LambdaAuthorizer",
       props.authorizerLambda,

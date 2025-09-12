@@ -68,6 +68,11 @@ export class BackendStack extends cdk.Stack {
       retention: cwlogs.RetentionDays.ONE_WEEK
     })
 
+    const counterAPIGatewayLogs  = new logs.LogGroup(this, "CounterAPIGatewayLogs", {
+      logGroupName: `/aws/api-gateway/counter`,
+      retention: cwlogs.RetentionDays.ONE_WEEK
+    })
+
     // API Gateway with Lambda Integration and Authorizer
     const api = new BackendApi(this, "CounterApi", {
       
@@ -76,20 +81,17 @@ export class BackendStack extends cdk.Stack {
       authorizerLambda: authorizerLambda.function,
       path: "/count",
       methods: ["GET"],
+      loggroup : counterAPIGatewayLogs.logGroup
     });
 
-    const counterAPIGatewayLogs  = new logs.LogGroup(this, "CounterAPIGatewayLogs", {
-      logGroupName: `/aws/api-gateway/${api.api.httpApiName}`,
-      retention: cwlogs.RetentionDays.ONE_WEEK
-    })
 
 
-    this.apiUrl = api.api.url!;
+    this.apiUrl = api.api.apiEndpoint;
     this.cfSecret = cfSecret.secret;
 
     // Outputs
     new cdk.CfnOutput(this, "ApiEndpoint", {
-      value: api.api.url!,
+      value: api.api.apiEndpoint,
     });
 
     new cdk.CfnOutput(this, "SecretArn", {
