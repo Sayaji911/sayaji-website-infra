@@ -46,10 +46,13 @@ export class BackendApi extends Construct {
           status: "$context.status",
           protocol: "$context.protocol",
           responseLength: "$context.responseLength",
-          // Authorizer-related
           authorizerError: "$context.authorizer.error"
         }),
       },
+      defaultRouteSettings: {
+        throttlingRateLimit: 1, 
+        throttlingBurstLimit: 2, 
+      }
     });
     const lambdaAuthorizer = new authorizer.HttpLambdaAuthorizer(
       "LambdaAuthorizer",
