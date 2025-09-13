@@ -7,6 +7,7 @@ import * as targets from "aws-cdk-lib/aws-route53-targets";
 import * as acm from "aws-cdk-lib/aws-certificatemanager";
 import { URL } from "url";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager"
+import * as cwlogs from "aws-cdk-lib/aws-logs";
 export interface MyCloudfrontProps {
   origin: cloudfront.IOrigin;
   defaultRootObject?: string;

@@ -47,10 +47,6 @@ export class BackendApi extends Construct {
           protocol: "$context.protocol",
           responseLength: "$context.responseLength",
           // Authorizer-related
-          principalId: "$context.authorizer.principalId",
-          userId: "$context.authorizer.userId",      // if your Lambda authorizer returns this
-          claims: "$context.authorizer.claims",      // for JWT authorizer claims
-          scopes: "$context.authorizer.scopes",      // for JWT authorizer scopes
           authorizerError: "$context.authorizer.error"
         }),
       },
