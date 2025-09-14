@@ -14,6 +14,15 @@ export interface BackendApiProps {
   path: string;
   methods: string[];
   loggroup: logs.ILogGroup
+
+
+  // CORS config
+  allowCredentials?: boolean;
+  allowHeaders?: string[];
+  allowMethods?: apigatewayv2.CorsHttpMethod[];
+  allowOrigins?: string[];
+  exposeHeaders?: string[];
+  maxAge?: cdk.Duration;
 }
 
 export class BackendApi extends Construct {
@@ -24,10 +33,20 @@ export class BackendApi extends Construct {
 
 
     // HttpApi without default stage (we’ll define our own)
-    this.api = new apigateway.HttpApi(this, "HttpApi", {
+    this.api = new apigatewayv2.HttpApi(this, "HttpApi", {
       apiName: props.apiName,
       createDefaultStage: false,
+      corsPreflight: {
+        allowCredentials: props.allowCredentials ?? true,
+        allowHeaders: props.allowHeaders ?? ["Content-Type", "Authorization"],
+        allowMethods: props.allowMethods ?? [apigatewayv2.CorsHttpMethod.ANY],
+        allowOrigins: props.allowOrigins ?? ["*"],
+        exposeHeaders: props.exposeHeaders,
+        maxAge: props.maxAge ?? cdk.Duration.days(10),
+      },
     });
+
+
 
     // Explicitly create $default stage with logging enabled
     new apigatewayv2.CfnStage(this, "DefaultStage", {

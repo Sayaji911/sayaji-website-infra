@@ -9,6 +9,7 @@ import * as path from "path";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager"
 import * as logs from "./constructs/cloudwatch-log-group"
 import * as cwlogs from "aws-cdk-lib/aws-logs";
+import * as apigatewayv2 from "aws-cdk-lib/aws-apigatewayv2";
 
 export class BackendStack extends cdk.Stack {
   public readonly apiUrl: string;
@@ -81,8 +82,17 @@ export class BackendStack extends cdk.Stack {
       authorizerLambda: authorizerLambda.function,
       path: "/count",
       methods: ["GET"],
-      loggroup : counterAPIGatewayLogs.logGroup
-    });
+      loggroup : counterAPIGatewayLogs.logGroup,
+      allowOrigins: ["https://resume.sayaji.dev"],
+      allowMethods: [
+        apigatewayv2.CorsHttpMethod.GET,
+        apigatewayv2.CorsHttpMethod.POST,
+        apigatewayv2.CorsHttpMethod.OPTIONS,
+      ],
+      allowHeaders: ["Content-Type", "Accept"],
+      exposeHeaders: [],
+      maxAge: cdk.Duration.seconds(3600),
+});
 
 
 
