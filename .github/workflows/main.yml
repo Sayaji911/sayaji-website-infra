@@ -125,28 +125,12 @@ jobs:
           cdk-diff.txt
         retention-days: 1
 
-  # Stage 4: Manual Approval (only for master branch)
-  approval:
-    name: "Stage 4: Await Manual Approval"
-    runs-on: ubuntu-latest
-    needs: [checkout, tests, plan]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    steps:
-      - name: Manual approval (yes/no only)
-        uses: trstringer/manual-approval@v1
-        with:
-          minimum-approvals: 1
-          approve-words: yes
-          deny-words: no
-          issue-title: "🚀 Approve Deployment to Production"
-          issue-body: |
-            Please reply with **yes** to approve or **no** to reject deployment.
 
-  # Stage 5: Deploy
+  # Stage 4: Deploy
   deploy:
     name: "Stage 5: Deploy to Production"
     runs-on: ubuntu-latest
-    needs: [checkout, tests, plan, approval]
+    needs: [checkout, tests, plan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     
     permissions:
