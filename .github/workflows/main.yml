@@ -125,12 +125,12 @@ jobs:
           cdk-diff.txt
         retention-days: 1
 
-  # Stage 4: Manual Approval (only for main branch)
+  # Stage 4: Manual Approval (only for master branch)
   approval:
     name: "Stage 4: Await Manual Approval"
     runs-on: ubuntu-latest
     needs: [checkout, tests, plan]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     environment:
       name: production   # must configure reviewers in repo settings
       url: https://sayaji.dev
@@ -151,7 +151,7 @@ jobs:
     name: "Stage 5: Deploy to Production"
     runs-on: ubuntu-latest
     needs: [checkout, tests, plan, approval]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     
     permissions:
       id-token: write
@@ -213,7 +213,7 @@ jobs:
     name: "Deployment Summary"
     runs-on: ubuntu-latest
     needs: [checkout, tests, plan, approval, deploy]
-    if: always() && (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: always() && (github.event_name == 'push' && github.ref == 'refs/heads/master')
     
     steps:
     - name: Deployment Summary
