@@ -192,7 +192,7 @@ jobs:
   summary:
     name: "Deployment Summary"
     runs-on: ubuntu-latest
-    needs: [checkout, tests, plan, approval, deploy]
+    needs: [checkout, tests, plan, deploy]
     if: always() && (github.event_name == 'push' && github.ref == 'refs/heads/master')
     
     steps:
