@@ -143,7 +143,7 @@ jobs:
           secret: ${{ secrets.GITHUB_TOKEN }}
           approvers: Sayaji911
           minimum-approvals: 1
-          issue-title: "Deploying v1.3.5 to prod from staging"
+          issue-title: "Deploying Infra"
           issue-body: "Please approve or deny the deployment"
           exclude-workflow-initiator-as-approver: false
           fail-on-denial: true
