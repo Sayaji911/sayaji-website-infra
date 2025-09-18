@@ -35,7 +35,7 @@ export class BackendStack extends cdk.Stack {
       lambdaName: "visit-counter",
       runtime: lambda.Runtime.PYTHON_3_10,
       handler: "index.handler",
-      code: lambda.Code.fromAsset(path.join(__dirname, "../lambda/counter")),
+      code: lambda.Code.fromAsset(path.join(__dirname, "../lambda_functions/counter")),
       environment: {
         TABLE_NAME: counterTable.table.tableName,
       },
@@ -54,7 +54,7 @@ export class BackendStack extends cdk.Stack {
       lambdaName: "api-authorizer",
       runtime: lambda.Runtime.PYTHON_3_10,
       handler: "index.handler",
-      code: lambda.Code.fromAsset(path.join(__dirname, "../lambda/authorizer")),
+      code: lambda.Code.fromAsset(path.join(__dirname, "../lambda_functions/authorizer")),
       environment: {
         SECRET_NAME: cfSecret.secret.secretName,
       },
