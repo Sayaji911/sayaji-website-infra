@@ -11,9 +11,12 @@ logger.setLevel(logging.INFO)
 dynamodb = boto3.resource('dynamodb')
 
 # DynamoDB table name from environment variable
-table = dynamodb.Table(os.environ['TABLE_NAME'])
 
 def handler(event, context):
+    
+    table = dynamodb.Table(os.environ['TABLE_NAME'])
+
+
     try:
         resp = table.update_item(
             Key={'id': 'counter'},
