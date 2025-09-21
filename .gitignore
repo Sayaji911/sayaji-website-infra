@@ -10,3 +10,8 @@ cdk.out
 #pythonfile
 .venv
 *.pyc
+.coverage
+
+
+#vscode
+.vscode

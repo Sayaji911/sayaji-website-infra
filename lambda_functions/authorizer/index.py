@@ -9,20 +9,16 @@ SECRET_NAME = os.environ.get("SECRET_NAME", "cf-secret")
 client = boto3.client("secretsmanager", region_name=REGION_NAME)
 
 def handler(event, context):
-    print("Event:", json.dumps(event))
 
     try:
         secret_response = client.get_secret_value(SecretId=SECRET_NAME)
         secret_data = json.loads(secret_response['SecretString'])
         expected_secret = secret_data['x-cf-secret']
-    except ClientError as e:
-        print("Error fetching secret:", e)
+    except Exception as e:
         return generate_policy('user', 'Deny', event['methodArn'])
 
     headers = event.get("headers", {})
     provided_secret = headers.get("x-cf-secret")
-
-    print("Expected:", expected_secret, "Provided:", provided_secret)
 
     if provided_secret == expected_secret:
         return generate_policy('user', 'Allow', event['methodArn'])
