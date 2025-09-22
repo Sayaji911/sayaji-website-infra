@@ -130,7 +130,7 @@ jobs:
   plan:
     name: "Plan Changes"
     runs-on: ubuntu-latest
-    needs: setup
+    needs: tests
     
     permissions:
       id-token: write
