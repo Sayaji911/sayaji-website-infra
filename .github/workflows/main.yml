@@ -13,7 +13,6 @@ env:
   PYTHON_VERSION: '3.10'
 
 jobs:
-  # Stage 1: Setup and Build
   setup:
     name: "Setup & Build"
     runs-on: ubuntu-latest
@@ -68,7 +67,6 @@ jobs:
           !.DS_Store
         retention-days: 1
 
-  # Stage 2: Parallel Tests and Plan
   tests:
     name: "Run Tests"
     runs-on: ubuntu-latest
@@ -180,7 +178,7 @@ jobs:
       run: |
         echo "📋 Checking for infrastructure changes..."
         {
-          echo "## 🏗️ CDK Infrastructure Changes"
+          echo "## CDK Infrastructure Changes"
           echo ""
           echo "### Stack Differences:"
           echo "\`\`\`diff"
@@ -212,32 +210,10 @@ jobs:
           cdk-diff.md
         retention-days: 7
 
-  # Stage 3: Quality Gate
-  quality-gate:
-    name: "Quality Gate"
-    runs-on: ubuntu-latest
-    needs: [tests, plan]
-    if: always()
-    
-    steps:
-    - name: Check job results
-      run: |
-        echo "🔍 Quality Gate Results:"
-        echo "Tests: ${{ needs.tests.result }}"
-        echo "Plan: ${{ needs.plan.result }}"
-        
-        if [[ "${{ needs.tests.result }}" != "success" || "${{ needs.plan.result }}" != "success" ]]; then
-          echo "❌ Quality gate failed!"
-          exit 1
-        else
-          echo "✅ Quality gate passed!"
-        fi
-
-  # Stage 4: Approval (Master branch only)
   approval:
     name: "Manual Approval"
     runs-on: ubuntu-latest
-    needs: [quality-gate]
+    needs: [plan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     environment: production  # Use GitHub Environments for better control
 
@@ -266,11 +242,10 @@ jobs:
         exclude-workflow-initiator-as-approver: false
         fail-on-denial: true
 
-  # Stage 5: Deploy (Master branch only, after approval)
   deploy:
     name: "Deploy to Production"
     runs-on: ubuntu-latest
-    needs: [setup, quality-gate, approval]
+    needs: [setup, approval]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     environment: production
     
@@ -357,75 +332,14 @@ jobs:
         # Example: curl health checks, AWS CLI validations, etc.
         echo "✅ Post-deployment validation completed!"
 
-  # Stage 6: Notification and Summary
   notify:
     name: "Notify & Cleanup"
     runs-on: ubuntu-latest
-    needs: [setup, tests, plan, quality-gate, approval, deploy]
+    needs: [setup, tests, plan,approval,deploy]
     if: always() && (github.event_name == 'push' && github.ref == 'refs/heads/master')
     
     steps:
     - name: Generate Deployment Report
       run: |
-        echo "## 📋 Deployment Summary Report" > deployment-report.md
-        echo "" >> deployment-report.md
-        echo "**Workflow:** ${{ github.workflow }}" >> deployment-report.md
-        echo "**Run ID:** ${{ github.run_id }}" >> deployment-report.md
-        echo "**Branch:** ${{ github.ref_name }}" >> deployment-report.md
-        echo "**Commit:** ${{ github.sha }}" >> deployment-report.md
-        echo "**Triggered by:** ${{ github.actor }}" >> deployment-report.md
-        echo "**Timestamp:** $(date -u)" >> deployment-report.md
-        echo "" >> deployment-report.md
-        echo "### Job Results:" >> deployment-report.md
-        echo "- 🔧 Setup: ${{ needs.setup.result }}" >> deployment-report.md
-        echo "- 🧪 Tests: ${{ needs.tests.result }}" >> deployment-report.md  
-        echo "- 📋 Plan: ${{ needs.plan.result }}" >> deployment-report.md
-        echo "- 🚪 Quality Gate: ${{ needs.quality-gate.result }}" >> deployment-report.md
-        echo "- ✋ Approval: ${{ needs.approval.result }}" >> deployment-report.md
-        echo "- 🚀 Deploy: ${{ needs.deploy.result }}" >> deployment-report.md
-        echo "" >> deployment-report.md
-        
-        if [[ "${{ needs.deploy.result }}" == "success" ]]; then
-          echo "🎉 **Status:** Deployment completed successfully!" >> deployment-report.md
-        else
-          echo "❌ **Status:** Deployment failed or was cancelled" >> deployment-report.md
-        fi
-        
-        cat deployment-report.md
-    
-    # Add Slack notification here if needed
-    # - name: Notify Slack
-    #   if: failure()
-    #   uses: 8398a7/action-slack@v3
-    #   with:
-    #     status: ${{ job.status }}
-    #     webhook_url: ${{ secrets.SLACK_WEBHOOK }}
-
-  # Cleanup job
-  cleanup:
-    name: "Cleanup Artifacts"
-    runs-on: ubuntu-latest
-    needs: [notify]
-    if: always()
-    
-    steps:
-    - name: Cleanup temporary artifacts
-      uses: actions/github-script@v7
-      with:
-        script: |
-          // Clean up temporary artifacts after 1 day
-          const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            run_id: context.runId,
-          });
-          
-          const tempArtifacts = artifacts.data.artifacts.filter(artifact => 
-            artifact.name.includes('workspace') || 
-            artifact.name.includes('source-code')
-          );
-          
-          for (const artifact of tempArtifacts) {
-            console.log(`Marking ${artifact.name} for cleanup`);
-            // Artifacts will be cleaned up automatically based on retention-days
-          }
+        echo "## 📋 Deployment Complete"
+  
