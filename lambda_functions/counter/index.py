@@ -8,7 +8,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Initialize AWS clients outside the handler (cold start optimization)
-dynamodb = boto3.resource('dynamodb')
+dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 
 # DynamoDB table name from environment variable
 table = dynamodb.Table(os.environ['TABLE_NAME'])
