@@ -283,7 +283,7 @@ jobs:
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: arn:aws:iam::381492077721:role/Github_Actions_Role
-        role-session-name: github-actions
+        role-session-name: github-actions-plan
         aws-region: ${{ env.AWS_REGION }}
     
     - name: Install CDK CLI
