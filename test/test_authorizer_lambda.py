@@ -71,8 +71,10 @@ class AuthoriserLambdaTest(unittest.TestCase):
     @mock.patch("lambda_functions.authorizer.index.client")
     def test_lambda_denies_request_with_invalid_secret(self, mock_handler) -> None:
 
-        mock_handler.get_secret_value.return_value = Exception("Some Secrets error")
-
+        mock_handler.get_secret_value.return_value = {
+            "SecretString": json.dumps({"x-cf-secret": "abcd"})
+        }
+        
         event = {
             "headers": {"x-cf-secret": "gfhi"},
             "methodArn": "arn:aws:execute-api:us-east-1:111122223333:ivdtdhp7b5/ESTestInvoke-stage/GET/",
