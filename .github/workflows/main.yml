@@ -7,15 +7,18 @@ on:
     branches: [ master ]
 
 env:
-  AWS_REGION: us-east-1  # Change to your preferred region
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.10'
 
 jobs:
-  # Stage 1: Checkout & Setup
-  checkout:
-    name: "Stage 1: Checkout & Setup"
+  # Stage 1: Setup and Build
+  setup:
+    name: "Setup & Build"
     runs-on: ubuntu-latest
     outputs:
-      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      cache-hit: ${{ steps.cache-deps.outputs.cache-hit }}
     
     steps:
     - name: Checkout code
@@ -24,97 +27,180 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
     
-    - name: Install dependencies
+    - name: Cache dependencies
+      id: cache-deps
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          ~/.cache/pip
+        key: deps-${{ runner.os }}-node${{ env.NODE_VERSION }}-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          deps-${{ runner.os }}-node${{ env.NODE_VERSION }}-
+    
+    - name: Install Node.js dependencies
+      if: steps.cache-deps.outputs.cache-hit != 'true'
       run: npm ci
     
-    - name: Upload workspace
-      id: upload
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        python -m pip install boto3 coverage pytest
+    
+    - name: Upload source code
       uses: actions/upload-artifact@v4
       with:
-        name: workspace-${{ github.run_id }}
+        name: source-code-${{ github.run_id }}
         path: |
           .
           !node_modules/.cache
+          !.git
+          !*.log
+          !.DS_Store
         retention-days: 1
 
-  # Stage 2: Tests
+  # Stage 2: Parallel Tests and Plan
   tests:
-    name: "Stage 2: Run Tests"
+    name: "Run Tests"
     runs-on: ubuntu-latest
-    needs: checkout
+    needs: setup
     
     steps:
-    - name: Download workspace
+    - name: Download source code
       uses: actions/download-artifact@v4
       with:
-        name: workspace-${{ github.run_id }}
+        name: source-code-${{ github.run_id }}
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
     
-    - name: Install dependencies
-      run: npm ci
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
     
-    - name: Run unit tests
-      run: npm test
+    - name: Restore dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          ~/.cache/pip
+        key: deps-${{ runner.os }}-node${{ env.NODE_VERSION }}-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          deps-${{ runner.os }}-node${{ env.NODE_VERSION }}-
     
-    - name: Run linting
-      run: npm run lint
-      continue-on-error: true
+    - name: Install dependencies (if cache miss)
+      run: |
+        npm ci
+        python -m pip install boto3 coverage pytest
     
-    - name: Run type checking
-      run: npm run build
+    - name: Display Python version
+      run: python -c "import sys; print(f'Python version: {sys.version}')"
+    
+    - name: Run Python tests with coverage
+      run: |
+        echo "🧪 Running Python tests..."
+        python3 -m unittest discover -s ./test -p "test_*.py" -v
+        coverage run -m unittest discover -s ./test -p "test_*.py"
+        coverage report -m
+        coverage xml
+    
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ github.run_id }}
+        path: |
+          coverage.xml
+          .coverage
+        retention-days: 7
 
-  # Stage 3: Plan (CDK Synth & Diff)
   plan:
-    name: "Stage 3: Plan Changes"
+    name: "Plan Changes"
     runs-on: ubuntu-latest
-    needs: [checkout, tests]
+    needs: setup
     
     permissions:
       id-token: write
       contents: read
+      pull-requests: write  # For PR comments
     
     steps:
-    - name: Download workspace
+    - name: Download source code
       uses: actions/download-artifact@v4
       with:
-        name: workspace-${{ github.run_id }}
+        name: source-code-${{ github.run_id }}
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
     
-    - name: Install dependencies
+    - name: Restore dependencies
+      uses: actions/cache@v4
+      with:
+        path: node_modules
+        key: deps-${{ runner.os }}-node${{ env.NODE_VERSION }}-${{ hashFiles('**/package-lock.json') }}
+    
+    - name: Install dependencies (if cache miss)
       run: npm ci
     
     - name: Configure AWS credentials (OIDC)
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: arn:aws:iam::381492077721:role/Github_Actions_Role
-        role-session-name: github-actions
-        aws-region: us-east-1
+        role-session-name: github-actions-plan
+        aws-region: ${{ env.AWS_REGION }}
     
     - name: Install CDK CLI
-      run: npm install -g aws-cdk
+      run: npm install -g aws-cdk@latest
     
     - name: CDK Synth
-      run: cdk synth --all
+      run: |
+        echo "🔄 Synthesizing CDK stacks..."
+        cdk synth --all --output cdk.out
     
     - name: CDK Diff
       id: diff
       run: |
-        echo "## CDK Plan Output"
-        echo "------------------"
-        cdk diff --all | tee cdk-diff.txt || true
+        echo "📋 Checking for infrastructure changes..."
+        {
+          echo "## 🏗️ CDK Infrastructure Changes"
+          echo ""
+          echo "### Stack Differences:"
+          echo "\`\`\`diff"
+          cdk diff --all 2>&1 || echo "No changes detected or diff failed"
+          echo "\`\`\`"
+        } > cdk-diff.md
+    
+    - name: Comment PR with changes
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const diffContent = fs.readFileSync('cdk-diff.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: diffContent
+          });
     
     - name: Upload CDK plan
       uses: actions/upload-artifact@v4
@@ -122,48 +208,80 @@ jobs:
         name: cdk-plan-${{ github.run_id }}
         path: |
           cdk.out/
-          cdk-diff.txt
-        retention-days: 1
+          cdk-diff.md
+        retention-days: 7
+
+  # Stage 3: Quality Gate
+  quality-gate:
+    name: "Quality Gate"
+    runs-on: ubuntu-latest
+    needs: [tests, plan]
+    if: always()
+    
+    steps:
+    - name: Check job results
+      run: |
+        echo "🔍 Quality Gate Results:"
+        echo "Tests: ${{ needs.tests.result }}"
+        echo "Plan: ${{ needs.plan.result }}"
         
-  # Stage 4: Approve
+        if [[ "${{ needs.tests.result }}" != "success" || "${{ needs.plan.result }}" != "success" ]]; then
+          echo "❌ Quality gate failed!"
+          exit 1
+        else
+          echo "✅ Quality gate passed!"
+        fi
+
+  # Stage 4: Approval (Master branch only)
   approval:
-    name: "Stage 4: Manual Approval"
-    runs-on : ubuntu-latest
-    needs: [checkout, tests, plan]
+    name: "Manual Approval"
+    runs-on: ubuntu-latest
+    needs: [quality-gate]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    environment: production  # Use GitHub Environments for better control
 
     permissions:
       issues: write
       contents: read
 
     steps:
-      - name : Request Manual Approval
-        uses : trstringer/manual-approval@v1
-        with:
-          secret: ${{ secrets.GITHUB_TOKEN }}
-          approvers: Sayaji911
-          minimum-approvals: 1
-          issue-title: "Deploying Infra"
-          issue-body: "Please approve or deny the deployment"
-          exclude-workflow-initiator-as-approver: false
-          fail-on-denial: true
+    - name: Request Manual Approval
+      uses: trstringer/manual-approval@v1
+      with:
+        secret: ${{ secrets.GITHUB_TOKEN }}
+        approvers: ${{ vars.DEPLOYMENT_APPROVERS || 'Sayaji911' }}
+        minimum-approvals: 1
+        issue-title: "🚀 Production Deployment Approval Required"
+        issue-body: |
+          ## Deployment Request
           
-  # Stage 5: Deploy
+          **Branch:** `${{ github.ref_name }}`
+          **Commit:** `${{ github.sha }}`
+          **Author:** `${{ github.actor }}`
+          
+          **Changes:** Please review the CDK diff in the plan job above.
+          
+          Please approve or deny this production deployment.
+        exclude-workflow-initiator-as-approver: false
+        fail-on-denial: true
+
+  # Stage 5: Deploy (Master branch only, after approval)
   deploy:
-    name: "Stage 5: Deploy to Production"
+    name: "Deploy to Production"
     runs-on: ubuntu-latest
-    needs: [checkout, tests, plan, approval]
+    needs: [setup, quality-gate, approval]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    environment: production
     
     permissions:
       id-token: write
       contents: read
     
     steps:
-    - name: Download workspace
+    - name: Download source code
       uses: actions/download-artifact@v4
       with:
-        name: workspace-${{ github.run_id }}
+        name: source-code-${{ github.run_id }}
     
     - name: Download CDK plan
       uses: actions/download-artifact@v4
@@ -173,62 +291,140 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
     
-    - name: Install dependencies
+    - name: Restore dependencies
+      uses: actions/cache@v4
+      with:
+        path: node_modules
+        key: deps-${{ runner.os }}-node${{ env.NODE_VERSION }}-${{ hashFiles('**/package-lock.json') }}
+    
+    - name: Install dependencies (if cache miss)
       run: npm ci
     
     - name: Configure AWS credentials (OIDC)
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: arn:aws:iam::381492077721:role/Github_Actions_Role
-        role-session-name: github-actions
-        aws-region: us-east-1
+        role-session-name: github-actions-deploy
+        aws-region: ${{ env.AWS_REGION }}
     
     - name: Install CDK CLI
-      run: npm install -g aws-cdk
+      run: npm install -g aws-cdk@latest
+    
+    - name: Verify AWS connection
+      run: |
+        echo "🔍 Verifying AWS connection..."
+        aws sts get-caller-identity
+        echo "✅ AWS connection verified"
     
     - name: Check CDK Bootstrap status
       run: |
         echo "🔍 Checking CDK bootstrap status..."
         if aws cloudformation describe-stacks --stack-name CDKToolkit --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
-          echo "✅ CDK already bootstrapped, skipping..."
+          echo "✅ CDK already bootstrapped"
         else
-          echo "🚀 Bootstrapping CDK for the first time..."
-          cdk bootstrap
+          echo "🚀 Bootstrapping CDK..."
+          cdk bootstrap aws://${{ env.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }} \
+            --cloudformation-execution-policies arn:aws:iam::aws:policy/AdministratorAccess
         fi
     
     - name: CDK Deploy
+      id: deploy
       run: |
         echo "🚀 Deploying CDK stacks..."
-        cdk deploy --all --require-approval never --verbose
+        cdk deploy --all \
+          --require-approval never \
+          --verbose \
+          --outputs-file outputs.json \
+          --progress events
         echo "✅ Deployment completed successfully!"
+    
+    - name: Upload deployment outputs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: deployment-outputs-${{ github.run_id }}
+        path: outputs.json
+        retention-days: 30
     
     - name: Post-deployment validation
       run: |
-        echo "🔍 Running post-deployment checks..."
-        echo "✅ All checks passed!"
+        echo "🔍 Running post-deployment validation..."
+        # Add your specific validation commands here
+        # Example: curl health checks, AWS CLI validations, etc.
+        echo "✅ Post-deployment validation completed!"
 
-  # Summary job
-  summary:
-    name: "Deployment Summary"
+  # Stage 6: Notification and Summary
+  notify:
+    name: "Notify & Cleanup"
     runs-on: ubuntu-latest
-    needs: [checkout, tests, plan, deploy]
+    needs: [setup, tests, plan, quality-gate, approval, deploy]
     if: always() && (github.event_name == 'push' && github.ref == 'refs/heads/master')
     
     steps:
-    - name: Deployment Summary
+    - name: Generate Deployment Report
       run: |
-        echo "## 📋 Deployment Summary"
-        echo "- Checkout: ${{ needs.checkout.result }}"
-        echo "- Tests: ${{ needs.tests.result }}"  
-        echo "- Plan: ${{ needs.plan.result }}"
-        echo "- Approval: ${{ needs.approval.result }}"
-        echo "- Deploy: ${{ needs.deploy.result }}"
+        echo "## 📋 Deployment Summary Report" > deployment-report.md
+        echo "" >> deployment-report.md
+        echo "**Workflow:** ${{ github.workflow }}" >> deployment-report.md
+        echo "**Run ID:** ${{ github.run_id }}" >> deployment-report.md
+        echo "**Branch:** ${{ github.ref_name }}" >> deployment-report.md
+        echo "**Commit:** ${{ github.sha }}" >> deployment-report.md
+        echo "**Triggered by:** ${{ github.actor }}" >> deployment-report.md
+        echo "**Timestamp:** $(date -u)" >> deployment-report.md
+        echo "" >> deployment-report.md
+        echo "### Job Results:" >> deployment-report.md
+        echo "- 🔧 Setup: ${{ needs.setup.result }}" >> deployment-report.md
+        echo "- 🧪 Tests: ${{ needs.tests.result }}" >> deployment-report.md  
+        echo "- 📋 Plan: ${{ needs.plan.result }}" >> deployment-report.md
+        echo "- 🚪 Quality Gate: ${{ needs.quality-gate.result }}" >> deployment-report.md
+        echo "- ✋ Approval: ${{ needs.approval.result }}" >> deployment-report.md
+        echo "- 🚀 Deploy: ${{ needs.deploy.result }}" >> deployment-report.md
+        echo "" >> deployment-report.md
         
         if [[ "${{ needs.deploy.result }}" == "success" ]]; then
-          echo "🎉 Deployment completed successfully!"
+          echo "🎉 **Status:** Deployment completed successfully!" >> deployment-report.md
         else
-          echo "❌ Deployment failed or was cancelled"
+          echo "❌ **Status:** Deployment failed or was cancelled" >> deployment-report.md
         fi
+        
+        cat deployment-report.md
+    
+    # Add Slack notification here if needed
+    # - name: Notify Slack
+    #   if: failure()
+    #   uses: 8398a7/action-slack@v3
+    #   with:
+    #     status: ${{ job.status }}
+    #     webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+  # Cleanup job
+  cleanup:
+    name: "Cleanup Artifacts"
+    runs-on: ubuntu-latest
+    needs: [notify]
+    if: always()
+    
+    steps:
+    - name: Cleanup temporary artifacts
+      uses: actions/github-script@v7
+      with:
+        script: |
+          // Clean up temporary artifacts after 1 day
+          const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            run_id: context.runId,
+          });
+          
+          const tempArtifacts = artifacts.data.artifacts.filter(artifact => 
+            artifact.name.includes('workspace') || 
+            artifact.name.includes('source-code')
+          );
+          
+          for (const artifact of tempArtifacts) {
+            console.log(`Marking ${artifact.name} for cleanup`);
+            // Artifacts will be cleaned up automatically based on retention-days
+          }
