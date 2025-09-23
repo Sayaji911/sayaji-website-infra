@@ -295,17 +295,6 @@ jobs:
         aws sts get-caller-identity
         echo "✅ AWS connection verified"
     
-    - name: Check CDK Bootstrap status
-      run: |
-        echo "🔍 Checking CDK bootstrap status..."
-        if aws cloudformation describe-stacks --stack-name CDKToolkit --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
-          echo "✅ CDK already bootstrapped"
-        else
-          echo "🚀 Bootstrapping CDK..."
-          cdk bootstrap aws://${{ env.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }} \
-            --cloudformation-execution-policies arn:aws:iam::aws:policy/AdministratorAccess
-        fi
-    
     - name: CDK Deploy
       id: deploy
       run: |
