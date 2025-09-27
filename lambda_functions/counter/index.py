@@ -2,6 +2,7 @@ import os
 import json
 import boto3
 import logging
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -17,22 +18,25 @@ def handler(event, context):
         if not src_ip:
             return {"statusCode": 400, "body": json.dumps({"message": "No IP found"})}
 
-        # Increment per-IP count
-        resp = table.update_item(
-            Key={"ip": src_ip},
-            UpdateExpression="ADD #count :inc",
-            ExpressionAttributeNames={"#count": "count"},
-            ExpressionAttributeValues={":inc": 1},
-            ReturnValues="UPDATED_NEW"
-        )
+        # Try to put new IP, but fail if it already exists
+        try:
+            table.put_item(
+                Item={"id": src_ip},
+                ConditionExpression="attribute_not_exists(id)"  # only insert if new
+            )
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
+                raise  # real error
+            # IP already exists → ignore
 
-        new_count = int(resp["Attributes"]["count"])
-        logger.info(f"Updated {src_ip}: count = {new_count}")
+        # Count all unique IPs
+        resp = table.scan(Select="COUNT")
+        total = resp["Count"]
 
         return {
             "statusCode": 200,
             "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"ip": src_ip, "count": new_count})
+            "body": json.dumps({"ip": src_ip, "unique_visitors": total})
         }
 
     except Exception as e:
