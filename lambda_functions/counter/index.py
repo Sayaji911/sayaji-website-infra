@@ -26,13 +26,12 @@ def handler(event, context):
             )
         except ClientError as e:
             if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
-                raise  # real error
-            # IP already exists → ignore
+                raise 
+            # IP already exists then do nothing
 
         # Count all unique IPs
         resp = table.scan(Select="COUNT")
         total = resp["Count"]
-
         return {
             "statusCode": 200,
             "headers": {"Content-Type": "application/json"},
