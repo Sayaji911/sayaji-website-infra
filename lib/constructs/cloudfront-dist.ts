@@ -30,15 +30,29 @@ export class WebsiteDistribution extends Construct {
     // Build API origin if provided
     const apiOrigin = props.apiUrl
       ? new origins.HttpOrigin(
-          cdk.Fn.select(2, cdk.Fn.split("/", props.apiUrl)),
-          {
-            protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
-            customHeaders: {
-              "x-cf-secret": props.cfSecret.secretValueFromJson('x-cf-secret').unsafeUnwrap() // Use unsafeUnwrap()
-            },
-          }
-        )
+        cdk.Fn.select(2, cdk.Fn.split("/", props.apiUrl)),
+        {
+          protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+          customHeaders: {
+            "x-cf-secret": props.cfSecret.secretValueFromJson('x-cf-secret').unsafeUnwrap() // Use unsafeUnwrap()
+          },
+        }
+      )
       : undefined;
+
+    // CloudFront Function to rewrite URLs ending in / to index.html
+    const rewriteFunction = new cloudfront.Function(this, 'RewriteFunction', {
+      code: cloudfront.FunctionCode.fromInline(`
+        function handler(event) {
+          var request = event.request;
+          var uri = request.uri;
+          if (uri.endsWith('/')) {
+            request.uri += 'index.html';
+          }
+          return request;
+        }
+      `),
+    });
 
     this.distribution = new cloudfront.Distribution(
       this,
@@ -48,17 +62,23 @@ export class WebsiteDistribution extends Construct {
           origin: props.origin,
           viewerProtocolPolicy:
             cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          functionAssociations: [
+            {
+              function: rewriteFunction,
+              eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+            },
+          ],
         },
         additionalBehaviors:
           props.apiUrl && props.apiPath && apiOrigin
             ? {
-                [props.apiPath]: {
-                  origin: apiOrigin,
-                  viewerProtocolPolicy:
-                    cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
-                  cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-                },
-              }
+              [props.apiPath]: {
+                origin: apiOrigin,
+                viewerProtocolPolicy:
+                  cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+                cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+              },
+            }
             : undefined,
         defaultRootObject: props.defaultRootObject ?? "index.html",
         domainNames: props.domainNames,
